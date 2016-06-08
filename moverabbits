@@ -1,0 +1,41 @@
+#!/usr/bin/env python
+from pyrabbit.api import Client
+import argparse, json
+
+def main():
+    ''' Simple CLI application to requeue rabbitmq messages to another queue using an exchange and routing key '''
+    parser = argparse.ArgumentParser(description='CLI application that allows you to move messages from one queue to another through an exchange')
+
+    parser.add_argument('--source',     '-s', help='The name of the source queue', required=True)
+    parser.add_argument('--routingkey', '-r', help='Destination routing key', required=True)
+    parser.add_argument('--exchange',   '-e', help='Destination exchange', required=True)
+    parser.add_argument('-n', dest="fetch_count", help='Nr of message to fetch')
+
+    parser.add_argument('--host', dest="host", help="Hostname of the server", required=True)
+    parser.add_argument('--port', dest="port", help="Port of the server")
+    parser.add_argument('--user', dest="username", help="Username", required=True)
+    parser.add_argument('--pass', dest="password", help="Password", required=True)
+
+    parser.add_argument('--requeue', dest='requeue', action='store_true', help="Requeue the messages fetched from the source queueu")
+    parser.add_argument('--no-requeue', dest='requeue', action='store_false', help="Do not requeue messages fetched from the source queueu")
+    parser.set_defaults(requeue=True, port='15672', fetch_count=10)
+
+    args = parser.parse_args()
+    vhost = '/'
+
+    cl = Client(args.host + ':' + args.port, args.username, args.password)
+    cl.is_alive()
+
+    # connect to queues
+    source = cl.get_queue(vhost, args.source)
+
+    # get messages from source
+    print "Fetching {} messages from the {} queue".format(args.fetch_count, args.source)
+    messages = cl.get_messages('/', args.source, args.fetch_count, args.requeue)
+    for msgTxt in messages:
+        msg = json.loads(msgTxt['payload'])
+        pretty = json.dumps(msg, sort_keys= True, indent= 4)
+        cl.publish(vhost, args.exchange, args.routingkey, pretty)
+
+if __name__ == '__main__':
+    main()
